@@ -88,6 +88,7 @@ const isSubType = (te1: TExp, te2: TExp, p: Program): boolean =>
 // p is passed to provide the context of all user defined types
 export const checkEqualType = (te1: TExp, te2: TExp, exp: Exp, p: Program): Result<TExp> =>
   equals(te1, te2) ? makeOk(te2) :
+  isSubType(te1, te2, p) ? makeOk(te2) :
   makeFailure(`Incompatible types: ${te1} and ${te2} in ${exp}`);
 
 
@@ -380,12 +381,19 @@ export const typeofDefineType = (exp: DefineTypeExp, _tenv: TEnv, _p: Program): 
     makeFailure(`Todo ${JSON.stringify(exp, null, 2)}`);
 
 // TODO L51
-export const typeofSet = (exp: SetExp, _tenv: TEnv, _p: Program): Result<TExp> =>
-    makeFailure(`Todo ${JSON.stringify(exp, null, 2)}`);
+export const typeofSet = (exp: SetExp, _tenv: TEnv, _p: Program): Result<TExp> => {
+    const varTE = typeofExp(exp.var, _tenv, _p);
+    const valTE = typeofExp(exp.val, _tenv, _p);
+    const constraint = bind(varTE, (varTE: TExp) =>
+                            bind(valTE, (valTE: TExp) =>
+                                checkEqualType(varTE, valTE, exp, _p)));
+    return mapv(constraint, (_) => makeVoidTExp());
+}
+    
 
 // TODO L51
 export const typeofLit = (exp: LitExp, _tenv: TEnv, _p: Program): Result<TExp> =>
-    makeFailure(`Todo ${JSON.stringify(exp, null, 2)}`);
+    
 
 // TODO: L51
 // Purpose: compute the type of a type-case
