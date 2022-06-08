@@ -11,7 +11,7 @@ import { isProcTExp, makeBoolTExp, makeNumTExp, makeProcTExp, makeStrTExp, makeV
          parseTE, unparseTExp, Record,
          BoolTExp, NumTExp, StrTExp, TExp, VoidTExp, UserDefinedTExp, isUserDefinedTExp, UDTExp, 
          isNumTExp, isBoolTExp, isStrTExp, isVoidTExp,
-         isRecord, ProcTExp, makeUserDefinedNameTExp, Field, makeAnyTExp, isAnyTExp, isUserDefinedNameTExp } from "./TExp";
+         isRecord, ProcTExp, makeUserDefinedNameTExp, Field, makeAnyTExp, isAnyTExp, isUserDefinedNameTExp, isAtomicTExp, isCompoundTExp } from "./TExp";
 import { isEmpty, allT, first, rest, cons } from '../shared/list';
 import { Result, makeFailure, bind, makeOk, zipWithResult, mapv, mapResult, isFailure, either } from '../shared/result';
 
@@ -77,7 +77,23 @@ export const getTypeByName = (typeName: string, p: Program): Result<UDTExp> => {
 // TODO L51
 // Is te1 a subtype of te2?
 const isSubType = (te1: TExp, te2: TExp, p: Program): boolean =>
+    isAnyTExp(te2) ? true :
+    (isNumTExp(te1) || isBoolTExp(te1) || isStrTExp(te1) || isVoidTExp(te1)) ? false :
+    (isProcTExp(te1) && isProcTExp(te2)) ? isProcSubType(te1, te2, p) :
+    isUserDefinedTExp(te1) ? false :
+    isRecord(te1) ? isSubType(makeUserDefinedNameTExp(te1.typeName), te2, p) :
+    (isUserDefinedNameTExp(te1) &&  isUserDefinedTExp(te2)) ? 
+        either(getUserDefinedTypeByName(te1.typeName, p),
+            (ud: UserDefinedTExp) => false, 
+            (_) => either(getRecordByName(te1.typeName, p),
+                    (rec: Record) => includes(te2, getParentsType(te1, p)), 
+                    (_) => false)) : 
     false;
+    
+
+const isProcSubType = (te1: ProcTExp, te2: ProcTExp, p: Program): boolean =>{
+    return true
+}
 
 
 // TODO L51: Change this definition to account for user defined types
@@ -151,8 +167,27 @@ export const checkCoverType = (types: TExp[], p: Program): Result<TExp> => {
 // Initialize TEnv with:
 // * Type of global variables (define expressions at top level of p)
 // * Type of implicitly defined procedures for user defined types (define-type expressions in p)
-export const initTEnv = (p: Program): TEnv =>
-    makeEmptyTEnv();
+export const initTEnv = (p: Program): TEnv => {
+    const env = makeEmptyTEnv();
+    const typeDefinitionsName = map((ud) => ud.typeName , getTypeDefinitions(p));
+    const definitionsName = map((d) => d.var.var, getDefinitions(p));
+    const recordsName = map((r) => r.typeName, getRecords(p));
+
+    const env1 = makeExtendTEnv(map((udn) => udn + "?", typeDefinitionsName),
+                    map((udn) => makeProcTExp([makeAnyTExp()], makeBoolTExp()), 
+                    typeDefinitionsName), env);
+
+    const env2 = makeExtendTEnv(map((r) => r + "?", recordsName),
+                    map((rn) => makeProcTExp([makeAnyTExp()], makeBoolTExp()), 
+                    recordsName), env1);
+
+    const env3 = makeExtendTEnv(map((rn) => "make-" + rn, recordsName),
+                    map((r) => makeProcTExp(map((f) => f.te, r.fields), r), 
+                    getRecords(p)), env2);
+
+    //TODO Define!!!!!!
+}
+    
 
 
 // Verify that user defined types and type-case expressions are semantically correct
