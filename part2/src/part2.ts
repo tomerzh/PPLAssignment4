@@ -16,17 +16,25 @@ export function makeTableService<T>(sync: (table?: Table<T>) => Promise<Table<T>
     return {
         get(key: string): Promise<T> {
             return new Promise <T> ((resolve, reject) => {
-               return sync().then((table) => {
-                   if (table[key] == undefined)
-                       reject(MISSING_KEY);
-                   else
-                       resolve(table [key]);
+                return sync().then((table) => {
+                    if (key in table)
+                        resolve(table [key]);
+                    else
+                        reject(MISSING_KEY);
+                       
                    })
                    .catch(() => reject(MISSING_KEY))
             })
          },
         set(key: string, val: T): Promise<void> {
-            return Promise.reject('not implemented')
+            return new Promise<void>((resolve, reject) => {
+                sync().then((table) => {
+                    if (key in table)
+
+                    else 
+                        resolve(MISSING_KEY);
+                })
+            })
         },
         delete(key: string): Promise<void> {
             return Promise.reject('not implemented')
