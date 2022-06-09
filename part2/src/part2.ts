@@ -9,13 +9,22 @@ export type TableService<T> = {
     delete(key: string): Promise<void>;
 }
 
+
 // Q 2.1 (a)
 export function makeTableService<T>(sync: (table?: Table<T>) => Promise<Table<T>>): TableService<T> {
     // optional initialization code
     return {
         get(key: string): Promise<T> {
-            return Promise.reject('not implemented')
-        },
+            return new Promise <T> ((resolve, reject) => {
+               return sync().then((table) => {
+                   if (table[key] == undefined)
+                       reject(MISSING_KEY);
+                   else
+                       resolve(table [key]);
+                   })
+                   .catch(() => reject(MISSING_KEY))
+            })
+         },
         set(key: string, val: T): Promise<void> {
             return Promise.reject('not implemented')
         },
