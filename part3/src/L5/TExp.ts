@@ -46,13 +46,25 @@ import { makeBox, setBox, unbox, Box } from '../shared/box';
 import { cons, first, rest } from '../shared/list';
 import { Result, bind, makeOk, makeFailure, mapResult, mapv } from "../shared/result";
 import { isCompoundSexp, isToken, parse as p } from "../shared/parser";
+import { SymbolSExp } from "./L5-value";
 
 export type TExp =  AtomicTExp | CompoundTExp | TVar | UserDefinedNameTExp; // L51
 export const isTExp = (x: any): x is TExp => isAtomicTExp(x) || isCompoundTExp(x) || isTVar(x) || isUserDefinedNameTExp(x); // L51
 
-export type AtomicTExp = NumTExp | BoolTExp | StrTExp | VoidTExp | UserDefinedNameTExp | AnyTExp; // L51
+export type AtomicTExp = NumTExp | BoolTExp | StrTExp | VoidTExp | UserDefinedNameTExp | AnyTExp | SymbolTExp | PairTExp; // L51
 export const isAtomicTExp = (x: any): x is AtomicTExp =>
     isNumTExp(x) || isBoolTExp(x) || isStrTExp(x) || isVoidTExp(x) || isUserDefinedNameTExp(x) || isAnyTExp(x); // L51
+
+export type LitTExp = SymbolTExp | PairTExp;
+export const isLitTExp = (x: any): x is LitTExp => isSymbolTExp(x) || isPairTExp(x);
+
+export type SymbolTExp = {tag: "SymbolTExp", val?: SymbolSExp};
+export const makeSymbolTExp = (s? : SymbolSExp): SymbolTExp => ({tag: "SymbolTExp", val: s});
+export const isSymbolTExp = (x: any): x is SymbolTExp => x.tag === "SymbolTExp";
+
+export type PairTExp = {tag: "PairTExp"};
+export const makePairTExp = (): PairTExp => ({tag: "PairTExp"});
+export const isPairTExp = (x: any): x is PairTExp => x.tag === "PairTExp";
 
 export type CompoundTExp = ProcTExp | TupleTExp | UserDefinedTExp | Record;  // L51
 export const isCompoundTExp = (x: any): x is CompoundTExp => isProcTExp(x) || isTupleTExp(x) || isUserDefinedTExp(x); 
@@ -89,6 +101,7 @@ export const isUserDefinedTExp = (x: any): x is UserDefinedTExp => x.tag === "Us
 // A user defined type - either a disjoint union UserDefinedTExp or a Record
 export type UDTExp = UserDefinedTExp | Record;
 // L51>
+
 
 
 export type NumTExp = { tag: "NumTExp" };
@@ -340,6 +353,8 @@ export const unparseTExp = (te: TExp): Result<string> => {
         isTVar(x) ? up(tvarContents(x)) :
         isUserDefinedTExp(x) ? unparseUserDefinedType(x) :
         isRecord(x) ? unparseRecord(x) :
+        isSymbolTExp(x) ? x.val ? makeOk(`symbol-${x.val.val}`) : makeOk('symbol') :
+        isPairTExp(x) ? makeOk('cons') :
         isProcTExp(x) ? bind(unparseTuple(x.paramTEs), (paramTEs: string[]) =>
                             mapv(unparseTExp(x.returnTE), (returnTE: string) =>
                                 [...paramTEs, '->', returnTE])) :
