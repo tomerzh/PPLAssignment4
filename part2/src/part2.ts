@@ -18,33 +18,63 @@ export function makeTableService<T>(sync: (table?: Table<T>) => Promise<Table<T>
             return new Promise <T> ((resolve, reject) => {
                 return sync().then((table) => {
                     if (key in table)
-                        resolve(table [key]);
+                        resolve(table[key]);
                     else
-                        reject(MISSING_KEY);
-                       
+                        reject(MISSING_KEY);                     
                    })
                    .catch(() => reject(MISSING_KEY))
             })
          },
         set(key: string, val: T): Promise<void> {
             return new Promise<void>((resolve, reject) => {
-                sync().then((table) => {
-                    if (key in table)
-
-                    else 
-                        resolve(MISSING_KEY);
+                return sync().then((table) => {
+                    let newTable : Record<string, Readonly<T>> = {};
+                    for (let k in table){
+                        if(k !== key){
+                            newTable[key] = table[key];
+                        }
+                    }
+                    newTable[key] = val;
+                    sync(newTable).then(() => resolve())
+                    .catch(() => reject(MISSING_KEY));
                 })
+                .catch(() => reject(MISSING_KEY));
             })
         },
         delete(key: string): Promise<void> {
-            return Promise.reject('not implemented')
+            return new Promise<void>((resolve, reject) => {
+                return sync().then((table) => {
+                    let newTable : Record<string, Readonly<T>> = {};
+                    let isInTable : boolean = false;
+                    for (let k in table) {
+                        if(k !== key) {
+                            newTable[key] = table[key];
+                        }
+                        else {
+                            isInTable = true;
+                        }
+                    }
+                    if(!isInTable) {
+                        reject(MISSING_KEY);
+                    }
+                    else{
+                        sync(newTable).then(() => resolve())
+                        .catch(() => reject(MISSING_KEY));
+                    }
+                })
+                .catch(() => reject(MISSING_KEY));
+            })
         }
     }
 }
 
 // Q 2.1 (b)
 export function getAll<T>(store: TableService<T>, keys: string[]): Promise<T[]> {
-    return Promise.reject('not implemented')
+    let values = [];
+    for (let i = 0; i < keys.length; i++) {
+        values[i] = store.get(keys[i]);
+    }
+    return Promise.all(values);
 }
 
 
@@ -58,8 +88,30 @@ export function isReference<T>(obj: T | Reference): obj is Reference {
 }
 
 export async function constructObjectFromTables(tables: TableServiceTable, ref: Reference) {
+
     async function deref(ref: Reference) {
-        return Promise.reject('not implemented')
+        if (ref.table in tables) {
+            try {
+                let value = await tables[ref.table].get(ref.key);
+                let newEntries : any[] = await Promise.all(Object.entries(value).map(
+                    async(entry) => {
+                        if (isReference(entry[1])) {
+                            return [entry[0], await deref(entry[1])];
+                        }
+                        else {
+                            return entry;
+                        }
+                    }
+                ))
+                return Object.fromEntries(newEntries);
+            }
+            catch {
+                return Promise.reject(MISSING_KEY);
+            }
+        }
+        else {
+            return Promise.reject(MISSING_TABLE_SERVICE);
+        }
     }
 
     return deref(ref)
