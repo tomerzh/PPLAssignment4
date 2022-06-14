@@ -121,13 +121,20 @@ export async function constructObjectFromTables(tables: TableServiceTable, ref: 
 
 export function lazyProduct<T1, T2>(g1: () => Generator<T1>, g2: () => Generator<T2>): () => Generator<[T1, T2]> {
     return function* () {
-        // TODO implement!
+        for (let v1 of g1()) {
+            for (let v2 of g2()) {
+                yield [v1, v2];
+            }
+        }
     }
 }
 
 export function lazyZip<T1, T2>(g1: () => Generator<T1>, g2: () => Generator<T2>): () => Generator<[T1, T2]> {
     return function* () {
-        // TODO implement!
+        const gen = g2();
+        for (let v1 of g1()) {
+            yield [v1, gen.next().value];
+        }
     }
 }
 
@@ -142,10 +149,22 @@ export type ReactiveTableService<T> = {
 export async function makeReactiveTableService<T>(sync: (table?: Table<T>) => Promise<Table<T>>, optimistic: boolean): Promise<ReactiveTableService<T>> {
     // optional initialization code
 
-    let _table: Table<T> = await sync()
+    let _table: Table<T> = await sync();
+    let currObserver = function (x: any) {};
+    let observers : Function[] = [];
 
     const handleMutation = async (newTable: Table<T>) => {
-        // TODO implement!
+        if (optimistic) {
+            for (let i = 0; i < observers.length; i++) {
+                observers[i](newTable);
+            }
+        }
+        try {
+            _table = await sync(newTable);
+        } catch (error) {
+            handleMutation(_table);
+            Promise.reject(error);
+        }
     }
     return {
         get(key: string): T {
@@ -155,15 +174,49 @@ export async function makeReactiveTableService<T>(sync: (table?: Table<T>) => Pr
                 throw MISSING_KEY
             }
         },
-        set(key: string, val: T): Promise<void> {
-            return handleMutation(null as any /* TODO */)
+        async set(key: string, val: T): Promise<void> {
+            let newTable : Record<string, Readonly<T>> = {};
+            for (let k in _table) {
+                if (k !== key) {
+                    newTable[k] = _table[k];
+                }
+            }
+            newTable[key] = val;
+            try {
+                await handleMutation(newTable);
+            } catch (error) {
+                currObserver(_table);
+                await Promise.reject(error);
+            }
+            if (!optimistic) {
+                currObserver(newTable);
+            }
         },
-        delete(key: string): Promise<void> {
-            return handleMutation(null as any /* TODO */)
+        async delete(key: string): Promise<void> {
+            let newTable : Record<string, Readonly<T>> = {};
+            if (key in _table) {
+                for (let k in _table) {
+                    if (k !== key) {
+                        newTable[k] = _table[k];
+                    }
+                }
+            }
+            else {
+                Promise.reject(MISSING_KEY);
+            }
+            try {
+                await handleMutation(newTable);
+            } catch (error) {
+                currObserver(_table);
+                await Promise.reject(error);
+            }
+            if (!optimistic) {
+                currObserver(newTable);
+            }
         },
-
         subscribe(observer: (table: Table<T>) => void): void {
-            // TODO implement!
+            currObserver = observer;
+            observers.push(currObserver);
         }
     }
 }
