@@ -1,6 +1,6 @@
 // L5-typecheck
 // ========================================================
-import { equals, filter, flatten, includes, map, intersection, zipWith, reduce, is } from 'ramda';
+import { equals, filter, flatten, includes, map, intersection, zipWith, reduce, is, mapAccum } from 'ramda';
 import { isAppExp, isBoolExp, isDefineExp, isIfExp, isLetrecExp, isLetExp, isNumExp,
          isPrimOp, isProcExp, isProgram, isStrExp, isVarRef, unparse, parseL51,
          AppExp, BoolExp, DefineExp, Exp, IfExp, LetrecExp, LetExp, NumExp, SetExp, LitExp,
@@ -80,12 +80,13 @@ export const getTypeByName = (typeName: string, p: Program): Result<UDTExp> => {
 // TODO L51
 // Is te1 a subtype of te2?
 const isSubType = (te1: TExp, te2: TExp, p: Program): boolean =>
+    equals(te1, te2) ? true :
     isAnyTExp(te2) ? true :
     (isNumTExp(te1) || isBoolTExp(te1) || isStrTExp(te1) || isVoidTExp(te1)) ? false :
     (isProcTExp(te1) && isProcTExp(te2)) ? isProcSubType(te1, te2, p) :
-    isUserDefinedTExp(te1) ? false :
+    isUserDefinedTExp(te1) ? isSubType(makeUserDefinedNameTExp(te1.typeName), te2, p) :
     isRecord(te1) ? isSubType(makeUserDefinedNameTExp(te1.typeName), te2, p) :
-    (isUserDefinedNameTExp(te1) &&  isUserDefinedTExp(te2)) ? 
+    (isUserDefinedNameTExp(te1) &&  isUserDefinedNameTExp(te2)) ? 
         either(getUserDefinedTypeByName(te1.typeName, p),
             (ud: UserDefinedTExp) => false, 
             (_) => either(getRecordByName(te1.typeName, p),
@@ -93,10 +94,6 @@ const isSubType = (te1: TExp, te2: TExp, p: Program): boolean =>
                     (_) => false)) : 
     false;
     
-
-const isProcSubType = (te1: ProcTExp, te2: ProcTExp, p: Program): boolean =>{
-    return true
-}
 
 
 // TODO L51: Change this definition to account for user defined types
@@ -106,9 +103,24 @@ const isProcSubType = (te1: ProcTExp, te2: ProcTExp, p: Program): boolean =>{
 // Exp is only passed for documentation purposes.
 // p is passed to provide the context of all user defined types
 export const checkEqualType = (te1: TExp, te2: TExp, exp: Exp, p: Program): Result<TExp> =>
-  equals(te1, te2) ? makeOk(te2) :
   isSubType(te1, te2, p) ? makeOk(te2) :
   makeFailure(`Incompatible types: ${te1} and ${te2} in ${exp}`);
+
+const isProcSubType = (te1: ProcTExp, te2: ProcTExp, p: Program): boolean =>{
+    const argsTe1 = te1.paramTEs;
+    const argsTe2 = te2.paramTEs;
+
+    let sub = (argsTe1.length === argsTe2.length);
+    for (let i = 0; sub && i < argsTe1.length; i++){
+        sub = isSubType(argsTe1[i], argsTe2[i], p); 
+    }
+    
+    if (sub){
+        sub = isSubType(te1.returnTE, te2.returnTE, p);
+    }
+
+    return sub;    
+}
 
 
 // L51
@@ -216,8 +228,10 @@ const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
                         map((r) => casesNames.includes(r.typeName),udt.records)), 
                         (ar) => (ar.reduce((acc, curr) => acc && curr, true)));
 
-    
-    const constraint3 = bind(constraint1, (p1) => p1 ?
+    const records = mapResult((name) => getRecordByName(name, p), casesNames);
+    const constraint3 = mapv(records, (recordsArr) => )
+
+    const constraint4 = bind(constraint1, (p1) => p1 ?
         bind(constraint2, (p2) => p2 ? makeOk(true) : makeFailure("error")) : makeFailure("error"));
     
     return makeOk(true);
@@ -324,7 +338,7 @@ export const typeofIf = (ifExp: IfExp, tenv: TEnv, p: Program): Result<TExp> => 
     const constraint1 = bind(testTE, testTE => checkEqualType(testTE, makeBoolTExp(), ifExp, p));
     const constraint2 = bind(thenTE, (thenTE: TExp) =>
                             bind(altTE, (altTE: TExp) =>
-                                checkEqualType(thenTE, altTE, ifExp, p)));
+                                checkCoverType([thenTE, altTE], p)));
     return bind(constraint1, (_c1) => constraint2);
 };
 
