@@ -277,25 +277,31 @@ const checkUserDefinedTypes = (p: Program): Result<true> =>{
  
 
 // TODO L51
+const checkCasesInRec = (c: CaseExp, recArray: Record[]): boolean => {
+    for(let i = 0; i < recArray.length; i++) 
+        if(recArray[i].fields.length === c.varDecls.length && recArray[i].typeName === c.typeName)
+            return true;
+    return false;
+}
+
 const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
     const caseName = tc.typeName;
     const casesNames = map((cs) => cs.typeName, tc.cases);
     const udtn = getUserDefinedTypeByName(caseName, p);
-    const constraint1 = mapv(udtn, (udt) => (udt.records.length == tc.cases.length) ?
-                            true : false);
-    const constraint2 = mapv(mapv(udtn, (udt) => 
-                        map((r5) => casesNames.includes(r5.typeName),udt.records)), 
-                        (ar) => (ar.reduce((acc, curr) => acc && curr, true)));
+    // const constraint1 = mapv(udtn, (udt) => (udt.records.length === tc.cases.length) ?
+    //                         true : false);
+
+    const records = getRecords(p);
+    // const boolArr = map((c) => checkCasesInRec(c, records), tc.cases);
+
+    // const constraint2 = boolArr.reduce((acc, curr) => acc && curr, true);
     
-    const con3boolArr = mapResult((cs) => mapv(getRecordByName(cs.typeName, p),
-                         (r5) => r5.fields.length === cs.varDecls.length), tc.cases);
-    
-    const constraint3 = isOk(con3boolArr) ? con3boolArr.value.reduce((acc, curr) => acc && curr, true) : 
-                        false;
-    
-    if(isOk(constraint1) && isOk(constraint2)){
-        if(constraint1.value && constraint2.value && constraint3){
-            return makeOk(true)
+    if(isOk(udtn)){
+        if(udtn.value.records.length === tc.cases.length){
+            for (let i = 0; i < tc.cases.length; i++){
+                if (!checkCasesInRec(tc.cases[i], records))
+                   return makeFailure("failed");
+           }
         }
 
         else{
@@ -303,9 +309,7 @@ const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
         }
     }
 
-    else{
-        return makeFailure("error")
-    }
+    return makeOk(true);
 }
     
     
