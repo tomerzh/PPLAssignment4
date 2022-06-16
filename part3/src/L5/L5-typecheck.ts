@@ -5,7 +5,7 @@ import { isAppExp, isBoolExp, isDefineExp, isIfExp, isLetrecExp, isLetExp, isNum
          isPrimOp, isProcExp, isProgram, isStrExp, isVarRef, unparse, parseL51,
          AppExp, BoolExp, DefineExp, Exp, IfExp, LetrecExp, LetExp, NumExp, SetExp, LitExp,
          Parsed, PrimOp, ProcExp, Program, StrExp, isSetExp, isLitExp, 
-         isDefineTypeExp, isTypeCaseExp, DefineTypeExp, TypeCaseExp, CaseExp } from "./L5-ast";
+         isDefineTypeExp, isTypeCaseExp, DefineTypeExp, TypeCaseExp, CaseExp, makeStrExp } from "./L5-ast";
 import { applyTEnv, makeEmptyTEnv, makeExtendTEnv, TEnv } from "./TEnv";
 import { isProcTExp, makeBoolTExp, makeNumTExp, makeProcTExp, makeStrTExp, makeVoidTExp,
          parseTE, unparseTExp, Record,
@@ -13,7 +13,7 @@ import { isProcTExp, makeBoolTExp, makeNumTExp, makeProcTExp, makeStrTExp, makeV
          isNumTExp, isBoolTExp, isStrTExp, isVoidTExp,
          isRecord, ProcTExp, makeUserDefinedNameTExp, Field, makeAnyTExp, isAnyTExp, isUserDefinedNameTExp, isAtomicTExp, isCompoundTExp, makeSymbolTExp, makePairTExp } from "./TExp";
 import { isEmpty, allT, first, rest, cons } from '../shared/list';
-import { Result, makeFailure, bind, makeOk, zipWithResult, mapv, mapResult, isFailure, either } from '../shared/result';
+import { Result, makeFailure, bind, makeOk, zipWithResult, mapv, mapResult, isFailure, either, isOk } from '../shared/result';
 import { isBoolean, isNumber, isString } from '../shared/type-predicates';
 import { isEmptySExp, isSymbolSExp, makeSymbolSExp } from './L5-value';
 import { isCompoundSexp } from '../shared/parser';
@@ -210,10 +210,71 @@ export const initTEnv = (p: Program): TEnv => {
 // Verify that user defined types and type-case expressions are semantically correct
 // =================================================================================
 // TODO L51
-const checkUserDefinedTypes = (p: Program): Result<true> =>
+const checkFields = (fields1: Field[], fields2: Field[], p: Program): boolean => {
+    for(let i = 0; i < fields1.length; i++){
+        if(fields1[i].fieldName !== fields2[i].fieldName){
+            return false;
+        }
+
+        else{
+            if(isFailure(checkEqualType(fields1[i].te, fields2[i].te, makeStrExp("err"), p))){
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+const baseCase = (udt: UserDefinedTExp): boolean => {
+    let flag = false;
+    const udtRecords = udt.records;
+    for(let i = 0; i < udtRecords.length; i++){
+        let rec = udtRecords[i];
+        for(let j = 0; j < rec.fields.length; j++){
+            let recField = rec.fields[j];
+            if(isUserDefinedTExp(recField.te)){
+                if(udt.typeName === recField.te.typeName){
+                    flag = true;
+                }
+            }
+        }
+
+        if(flag){
+            flag = false;
+        }
+
+        else{
+            return true;
+        }
+    }
+
+    return false;
+}
+
+const checkUserDefinedTypes = (p: Program): Result<true> =>{
     // If the same type name is defined twice with different definitions
+    const allRecordsArr = getRecords(p);
+    const con1BollArr = map((r1) => map((r2) => ((r1.typeName === r2.typeName) && (r1.fields.length === r2.fields.length)) ? 
+                        checkFields(r1.fields, r2.fields, p) : true, allRecordsArr) , allRecordsArr);
+
+    const boolArr1 =  map((arr) => arr.reduce((acc, curr) => acc && curr, true), con1BollArr);
+    const constraint1 = boolArr1.reduce((acc, curr) => acc && curr, true);
+
     // If a recursive type has no base case
-    makeOk(true);
+    const allDefinedTypes = getTypeDefinitions(p);
+    const constraint2 = map((udt) => baseCase(udt), allDefinedTypes).reduce((acc, curr) => acc && curr, true);
+
+    if(constraint1 && constraint2){
+        return makeOk(true);
+    }
+
+    else{
+        return makeFailure("err");
+    }
+    
+}
+ 
 
 // TODO L51
 const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
@@ -223,16 +284,28 @@ const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
     const constraint1 = mapv(udtn, (udt) => (udt.records.length == tc.cases.length) ?
                             true : false);
     const constraint2 = mapv(mapv(udtn, (udt) => 
-                        map((r) => casesNames.includes(r.typeName),udt.records)), 
+                        map((r5) => casesNames.includes(r5.typeName),udt.records)), 
                         (ar) => (ar.reduce((acc, curr) => acc && curr, true)));
-
-    const records = mapResult((name) => getRecordByName(name, p), casesNames);
-    const constraint3 = mapv(records, (recordsArr) => )
-
-    const constraint4 = bind(constraint1, (p1) => p1 ?
-        bind(constraint2, (p2) => p2 ? makeOk(true) : makeFailure("error")) : makeFailure("error"));
     
-    return makeOk(true);
+    const con3boolArr = mapResult((cs) => mapv(getRecordByName(cs.typeName, p),
+                         (r5) => r5.fields.length === cs.varDecls.length), tc.cases);
+    
+    const constraint3 = isOk(con3boolArr) ? con3boolArr.value.reduce((acc, curr) => acc && curr, true) : 
+                        false;
+    
+    if(isOk(constraint1) && isOk(constraint2)){
+        if(constraint1.value && constraint2.value && constraint3){
+            return makeOk(true)
+        }
+
+        else{
+            return makeFailure("error")
+        }
+    }
+
+    else{
+        return makeFailure("error")
+    }
 }
     
     
@@ -443,7 +516,7 @@ export const typeofProgram = (exp: Program, tenv: TEnv, p: Program): Result<TExp
 // TODO L51
 // Write the typing rule for DefineType expressions
 export const typeofDefineType = (exp: DefineTypeExp, _tenv: TEnv, _p: Program): Result<TExp> =>
-    makeFailure(`Todo ${JSON.stringify(exp, null, 2)}`);
+    bind(checkUserDefinedTypes(_p), ()=>getUserDefinedTypeByName(exp.typeName, _p));
 
 // TODO L51
 export const typeofSet = (exp: SetExp, _tenv: TEnv, _p: Program): Result<TExp> => {
@@ -477,5 +550,8 @@ export const typeofLit = (exp: LitExp, _tenv: TEnv, _p: Program): Result<TExp> =
 //   ( type-case id val (record_1 (field_11 ... field_1r1) body_1)...  )
 //  TODO
 export const typeofTypeCase = (exp: TypeCaseExp, tenv: TEnv, p: Program): Result<TExp> => {
-    return makeFailure(`TODO: typecase ${JSON.stringify(exp, null, 2)}`);
+    const bodyCasesTypes = mapResult((cs) => typeofExps(cs.body, tenv, p), exp.cases);
+    return bind(checkTypeCase(exp, p), (_) => bind(bodyCasesTypes, (texpArr) => checkCoverType(texpArr, p)));
 }
+    
+
