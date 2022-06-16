@@ -118,7 +118,6 @@ const isProcSubType = (te1: ProcTExp, te2: ProcTExp, p: Program): boolean =>{
     if (sub){
         sub = isSubType(te1.returnTE, te2.returnTE, p);
     }
-
     return sub;    
 }
 
@@ -203,7 +202,6 @@ export const initTEnv = (p: Program): TEnv => {
                     getRecords(p)), env2);
 
     const env4 = makeExtendTEnv(definitionsName, definitionsType, env3);
-
     return env4;
 }
     
