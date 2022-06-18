@@ -274,7 +274,6 @@ const checkUserDefinedTypes = (p: Program): Result<true> =>{
     }
     
 }
- 
 
 // TODO L51
 const checkCasesInRec = (c: CaseExp, recArray: Record[]): boolean => {
@@ -286,16 +285,12 @@ const checkCasesInRec = (c: CaseExp, recArray: Record[]): boolean => {
 
 const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
     const caseName = tc.typeName;
-    const casesNames = map((cs) => cs.typeName, tc.cases);
     const udtn = getUserDefinedTypeByName(caseName, p);
     // const constraint1 = mapv(udtn, (udt) => (udt.records.length === tc.cases.length) ?
     //                         true : false);
-
     const records = getRecords(p);
     // const boolArr = map((c) => checkCasesInRec(c, records), tc.cases);
-
     // const constraint2 = boolArr.reduce((acc, curr) => acc && curr, true);
-    
     if(isOk(udtn)){
         if(udtn.value.records.length === tc.cases.length){
             for (let i = 0; i < tc.cases.length; i++){
@@ -303,18 +298,13 @@ const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
                    return makeFailure("failed");
            }
         }
-
         else{
             return makeFailure("error")
         }
     }
-
     return makeOk(true);
 }
-    
-    
-
-
+ 
 // Compute the type of L5 AST exps to TE
 // ===============================================
 // Compute a Typed-L5 AST exp to a Texp on the basis
@@ -553,9 +543,18 @@ export const typeofLit = (exp: LitExp, _tenv: TEnv, _p: Program): Result<TExp> =
 //         body_i for i in [1..n] sequences of CExp
 //   ( type-case id val (record_1 (field_11 ... field_1r1) body_1)...  )
 //  TODO
+
+const caseVarToBodyType = (cs: CaseExp, tenv: TEnv, p: Program): Result<TExp> => {
+    const caseVarDecl = map((decl) => decl.var ,cs.varDecls);
+    const record = getRecordByName(cs.typeName, p);
+    const recordFieldsTExp = mapv(record, (r) => map((field) => field.te ,r.fields));
+    return bind(recordFieldsTExp, 
+                    (texps) => typeofExps(cs.body, makeExtendTEnv(caseVarDecl, texps, tenv), p));
+}
+
 export const typeofTypeCase = (exp: TypeCaseExp, tenv: TEnv, p: Program): Result<TExp> => {
-    const bodyCasesTypes = mapResult((cs) => typeofExps(cs.body, tenv, p), exp.cases);
-    return bind(checkTypeCase(exp, p), (_) => bind(bodyCasesTypes, (texpArr) => checkCoverType(texpArr, p)));
+    const texpForCases = mapResult((cs) => caseVarToBodyType(cs, tenv, p), exp.cases);
+    return bind(checkTypeCase(exp, p), (_) => bind(texpForCases, (texpArr) => checkCoverType(texpArr, p)));
 }
     
 
