@@ -504,7 +504,7 @@ export const typeofProgram = (exp: Program, tenv: TEnv, p: Program): Result<TExp
 // TODO L51
 // Write the typing rule for DefineType expressions
 export const typeofDefineType = (exp: DefineTypeExp, _tenv: TEnv, _p: Program): Result<TExp> =>
-    bind(checkUserDefinedTypes(_p), () => getUserDefinedTypeByName(exp.typeName, _p));
+    mapv(checkUserDefinedTypes(_p), () => makeVoidTExp());
 
 // TODO L51
 export const typeofSet = (exp: SetExp, _tenv: TEnv, _p: Program): Result<TExp> => {
