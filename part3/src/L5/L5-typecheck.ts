@@ -239,7 +239,6 @@ const baseCase = (udt: UserDefinedTExp): boolean => {
                 }
             }
         }
-
         if(flag){
             flag = false;
         }
@@ -248,7 +247,6 @@ const baseCase = (udt: UserDefinedTExp): boolean => {
             return true;
         }
     }
-
     return false;
 }
 
@@ -286,11 +284,7 @@ const checkCasesInRec = (c: CaseExp, recArray: Record[]): boolean => {
 const checkTypeCase = (tc: TypeCaseExp, p: Program): Result<true> => {
     const caseName = tc.typeName;
     const udtn = getUserDefinedTypeByName(caseName, p);
-    // const constraint1 = mapv(udtn, (udt) => (udt.records.length === tc.cases.length) ?
-    //                         true : false);
     const records = getRecords(p);
-    // const boolArr = map((c) => checkCasesInRec(c, records), tc.cases);
-    // const constraint2 = boolArr.reduce((acc, curr) => acc && curr, true);
     if(isOk(udtn)){
         if(udtn.value.records.length === tc.cases.length){
             for (let i = 0; i < tc.cases.length; i++){
@@ -510,7 +504,7 @@ export const typeofProgram = (exp: Program, tenv: TEnv, p: Program): Result<TExp
 // TODO L51
 // Write the typing rule for DefineType expressions
 export const typeofDefineType = (exp: DefineTypeExp, _tenv: TEnv, _p: Program): Result<TExp> =>
-    bind(checkUserDefinedTypes(_p), ()=>getUserDefinedTypeByName(exp.typeName, _p));
+    bind(checkUserDefinedTypes(_p), () => getUserDefinedTypeByName(exp.typeName, _p));
 
 // TODO L51
 export const typeofSet = (exp: SetExp, _tenv: TEnv, _p: Program): Result<TExp> => {
